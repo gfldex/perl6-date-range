@@ -1,0 +1,35 @@
+{
+  "production": false,
+  "meta-version": "0",
+  "tags": [
+    
+  ],
+  "build-depends": [
+    
+  ],
+  "authors": [
+    "Wenzel P. P. Peppmeyer <wenzel.peppmeyer@gmx.de>"
+  ],
+  "source-url": "https://github.com/gfldex/perl6-date-range.git",
+  "test-depends": [
+    
+  ],
+  "description": "",
+  "version": "0.0.1",
+  "perl": "6.c",
+  "auth": "github:gfldex",
+  "depends": [
+    "Test::META"
+  ],
+  "provides": {
+    
+  },
+  "name": "Date::Range",
+  "license": "Artistic-2.0",
+  "support": {
+    "source": null
+  },
+  "resources": [
+    
+  ]
+}
