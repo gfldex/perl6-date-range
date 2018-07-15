@@ -1,6 +1,15 @@
 use v6.c;
 
 use MONKEY-TYPING;
+        
+sub IS-LEAP-YEAR(\y) { y %% 4 and not y %% 100 or y %% 400 }
+
+sub DAYS-IN-MONTH(\year, \month) {
+    my @days-in-month = 0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31;
+
+    @days-in-month[month] || (month == 2 ?? 28 + IS-LEAP-YEAR(year) !! Nil)
+}
+
 
 class Weekday {...}
 
@@ -35,7 +44,7 @@ class DateTimeRange {
 
         $year = $year ~~ Whatever ?? -∞..∞ !! $year;
         $month = $month ~~ Whatever ?? 1..12 !! $month;
-        $day = $day ~~ Whatever ?? 0..31 !! $day;
+        # $day = $day ~~ Whatever ?? 1..31 !! $day;
         $hour = $hour ~~ Whatever ?? 0..23 !! $hour;
         $minute = $minute ~~ Whatever ?? 0..59 !! $minute;
         $second = $second ~~ Whatever ?? 0..60 !! $second;
@@ -62,9 +71,11 @@ class DateTimeRange {
     }
 
     multi method ACCEPTS(DateTime \other){
+        my $day = $!day ~~ Whatever ?? 1..31 !! $!day;
+
         other.year ~~ $!year
         && other.month ~~ $!month
-        && other.day ~~ $!day
+        && other.day ~~ $day
         && other.hour ~~ $!hour
         && other.minute ~~ $!minute
         && other.second ~~ $!second
@@ -78,7 +89,7 @@ class DateTimeRange {
         my Supplier::Preserving $supply .= new;
 
         start {
-            sub move-iterator-to-next-value($value, $it is rw){
+            sub move-iterator-to-next-value($value, $it is raw){
                 my $current-value;
                 while ($current-value := $it.pull-one) !=:= IterationEnd {
                     last if $current-value >= $value
@@ -93,31 +104,30 @@ class DateTimeRange {
             my $start-day = $now.DateTime.day;
             my $start-hour = $now.DateTime.hour;
             my $start-minute = $now.DateTime.minute;
-            my $start-second = $now.DateTime.whole-second;
+            # my $start-second = $now.DateTime.second.ceiling;
+            my $start-second = $now.DateTime.second;
             my $it-y = ($start-year .. $.year.max).iterator;
-            dd $now;
+
             loop (my Mu $til-y := move-iterator-to-next-value($now.year, $it-y); $til-y !=:= IterationEnd; $til-y := $it-y.pull-one) {
                 my $it-m = $.month.cache.iterator;
                 loop (my Mu $til-m := move-iterator-to-next-value($start-month, $it-m); $til-m !=:= IterationEnd; $til-m := $it-m.pull-one) {
-                    my $it-d = $.day.cache.iterator;
+                    my $day = $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($til-y, $til-m) !! $.day;
+                    my $it-d = $day.cache.iterator;
                     loop (my Mu $til-d := move-iterator-to-next-value($start-day, $it-d); $til-d !=:= IterationEnd; $til-d := $it-d.pull-one) {
                         my $it-h = $.hour.cache.iterator;
                         loop (my Mu $til-h := move-iterator-to-next-value($start-hour, $it-h); $til-h !=:= IterationEnd; $til-h := $it-h.pull-one) {
                             my $it-min = $.minute.cache.iterator;
                             loop (my Mu $til-min := move-iterator-to-next-value($start-minute, $it-min); $til-min !=:= IterationEnd; $til-min := $it-min.pull-one) {
-                                $start-second = 0 unless $til-min - $start-minute;
+                                $start-second = 0 if $til-min - $start-minute;
                                 my $it-s = $.second.cache.iterator;
-                                loop (my Mu $til-s = move-iterator-to-next-value($start-second, $it-s); $til-s !=:= IterationEnd; $til-s := $it-s.pull-one) {
-                                    sleep 1;
+                                loop (my Mu $til-s := move-iterator-to-next-value($start-second, $it-s); $til-s !=:= IterationEnd; $til-s := $it-s.pull-one) {
+                                    # sleep 1;
                                     my $instant = DateTime.new($til-y, $til-m, $til-d, $til-h, $til-min, $til-s).Instant;
                                     
-                                    say [$til-y, $til-m, $til-d, $til-h, $til-min, $til-s];
-                                    say [$instant.DateTime.day-of-week, $.weekdays, $instant.DateTime.day-of-week ∩ $.weekdays];
-                                    
                                     next unless $instant.DateTime.day-of-week ∩ $.weekdays;
-                                    say "sleep until {$instant.DateTime}";
+                                    # say "sleep until {$instant.DateTime}";
                                     sleep-until($instant);
-                                    $supply.emit(now.DateTime);
+                                    $supply.emit($instant.DateTime);
                                 }
                             }
                             $start-minute = 0;
@@ -133,18 +143,34 @@ class DateTimeRange {
 
         $supply
     }
+
+    multi method list {
+        gather for $.year.cache -> $y {
+            for $.month.cache -> $m {
+                
+                my @day := $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($y, $m) !! $.day;
+
+                for @day -> $d {
+                    for $.hour.cache -> $h {
+                        for $.minute.cache -> $min {
+                            for $.second.cache -> $s {
+                                my $date = DateTime.new($y, $m, $d, $h, $min, $s); 
+                                next unless $date.day-of-week ∩ $.weekdays;
+                                take $date;
+                                CATCH { default { dd $y, $m, @day; .throw} }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 augment class Date {
     multi method new(IntWhatever $year is copy,IntWhatever $month is copy, IntWhatever $day is copy, :&formatter, *%_) {
         $month ~~ Whatever || 1 <= ($month ~~ Range ?? $month.min !! $month) && ($month ~~ Range ?? $month.max !! $month) <= 12
             or X::OutOfRange.new(:what<Month>, :got($month.perl), :range<1..12>).throw;
-
-        sub DAYS-IN-MONTH(\year, \month) {
-            my @days-in-month = 0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31;
-
-            @days-in-month[month] || (month == 2 ?? 28 + Dateish.IS-LEAP-YEAR(year) !! Nil)
-        }
 
         my $valid-day-range = 1..31;
 
