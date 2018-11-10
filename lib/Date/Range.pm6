@@ -13,23 +13,8 @@ sub DAYS-IN-MONTH(\year, \month) {
 
 class Weekday {...}
 
-subset IntWhatever where * ~~ Int|Whatever|Range|Seq|List;
-
-class DateRange {
-    has $.year;
-    has $.month;
-    has $.day;
-
-    multi method ACCEPTS(Date(Dateish) \other){
-        other.year ~~ $!year
-        && other.month ~~ $!month
-        && other.day ~~ $!day
-    }
-
-    multi method ACCEPTS(Instant \other){
-        other.DateTime ~~ self
-    }
-}
+constant Ultimo = Mu.new;
+subset IntWhatever where * ~~ Int|Whatever|Range|Seq|List|Ultimo;
 
 class DateTimeRange {
     has $.year;
@@ -44,7 +29,6 @@ class DateTimeRange {
 
         $year = $year ~~ Whatever ?? -∞..∞ !! $year;
         $month = $month ~~ Whatever ?? 1..12 !! $month;
-        # $day = $day ~~ Whatever ?? 1..31 !! $day;
         $hour = $hour ~~ Whatever ?? 0..23 !! $hour;
         $minute = $minute ~~ Whatever ?? 0..59 !! $minute;
         $second = $second ~~ Whatever ?? 0..60 !! $second;
@@ -141,7 +125,11 @@ class DateTimeRange {
             }
         }
 
-        $supply
+        $supply.Supply
+    }
+
+    method tap {
+        self.Supply
     }
 
     multi method list {
@@ -157,7 +145,6 @@ class DateTimeRange {
                                 my $date = DateTime.new($y, $m, $d, $h, $min, $s); 
                                 next unless $date.day-of-week ∩ $.weekdays;
                                 take $date;
-                                CATCH { default { dd $y, $m, @day; .throw} }
                             }
                         }
                     }
@@ -166,6 +153,73 @@ class DateTimeRange {
         }
     }
 }
+
+class DateRange {
+    has $.year;
+    has $.month;
+    has $.day;
+    has $.hour;
+    has @.weekdays;
+
+    multi method new(IntWhatever $year is copy, IntWhatever $month is copy, IntWhatever $day is copy, :&formatter, *%_, :mo(:$monday), :tu(:$tuesday), :we(:$wednesday), :th(:$thursday), :fr(:$friday), :sa(:$saturday), :su(:$sunday)) {
+        $month = $month ~~ Whatever ?? 1..12 !! $month;
+
+        my @weekdays;
+        if any($monday, $tuesday, $wednesday, $thursday, $friday, $saturday, $sunday) {
+            @weekdays = ();
+            @weekdays.push(1) if $monday;
+            @weekdays.push(2) if $tuesday;
+            @weekdays.push(3) if $wednesday;
+            @weekdays.push(4) if $thursday;
+            @weekdays.push(5) if $friday;
+            @weekdays.push(6) if $saturday;
+            @weekdays.push(7) if $sunday;
+        } else {
+            @weekdays = 1..7;
+        }
+        
+        DateRange.new(:$year, :$month, :$day, :@weekdays)
+    }
+
+    multi method ACCEPTS(Date(Dateish) \other){
+        $!year ~~ Whatever ?? True !! other.year ∩ $!year
+        && other.month ∩ $!month
+        && $!day ~~ Whatever ?? True !! other.day ∩ $!day
+    }
+
+    multi method ACCEPTS(Instant \other){
+        other.DateTime ~~ self
+    }
+
+    multi method ACCEPTS(DateTime \other) {
+    
+    }
+
+    multi method Supply {
+
+    }
+
+    multi method tap {
+        self.Supply
+    }
+
+    multi method list {
+        gather for $.year.cache -> $y {
+            for $.month.cache -> $m {
+
+                my @day := $.day ~~ Whatever ?? (1 .. DAYS-IN-MONTH($y, $m)) !! $.day;
+
+                for @day -> $d {
+                    my $date = Date.new($y, $m, $d); 
+                    next unless $date.day-of-week ∩ $.weekdays;
+                    take $date;
+                }
+            }
+        }
+    
+    }
+}
+
 
 augment class Date {
     multi method new(IntWhatever $year is copy,IntWhatever $month is copy, IntWhatever $day is copy, :&formatter, *%_) {
@@ -220,4 +274,15 @@ constant Friday    is export = Weekday.new(5);
 constant Saturday  is export = Weekday.new(6);
 constant Sunday    is export = Weekday.new(7);
 
-
+constant January   is export = DateRange.new(*,1,*);
+constant February  is export = DateRange.new(*,2,*);
+constant March     is export = DateRange.new(*,3,*);
+constant April     is export = DateRange.new(*,4,*);
+constant May       is export = DateRange.new(*,5,*);
+constant June      is export = DateRange.new(*,6,*);
+constant July      is export = DateRange.new(*,7,*);
+constant August    is export = DateRange.new(*,8,*);
+constant September is export = DateRange.new(*,9,*);
+constant October   is export = DateRange.new(*,10,*);
+constant November  is export = DateRange.new(*,11,*);
+constant December  is export = DateRange.new(*,12,*);
