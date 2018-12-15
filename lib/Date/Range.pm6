@@ -136,7 +136,7 @@ class DateTimeRange {
         gather for $.year.cache -> $y {
             for $.month.cache -> $m {
                 
-                my @day := $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($y, $m) !! $.day;
+                my @day := $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($y, $m) !! @($.day);
 
                 for @day -> $d {
                     for $.hour.cache -> $h {
@@ -206,8 +206,7 @@ class DateRange {
     multi method list {
         gather for $.year.cache -> $y {
             for $.month.cache -> $m {
-
-                my @day := $.day ~~ Whatever ?? (1 .. DAYS-IN-MONTH($y, $m)) !! $.day;
+                my @day := $.day ~~ Whatever ?? (1 .. DAYS-IN-MONTH($y, $m)) !! @($.day);
 
                 for @day -> $d {
                     my $date = Date.new($y, $m, $d); 
@@ -216,8 +215,16 @@ class DateRange {
                 }
             }
         }
-    
     }
+
+    method Numeric {
+        self.list.Int
+    }
+
+    method Int {
+        self.list.Int
+    }
+
 }
 
 
