@@ -2,10 +2,10 @@ use v6.c;
 
 use MONKEY-TYPING;
         
-sub IS-LEAP-YEAR(\y) { y %% 4 and not y %% 100 or y %% 400 }
+sub IS-LEAP-YEAR(int \y --> Bool:D) { y %% 4 and not y %% 100 or y %% 400 }
 
-sub DAYS-IN-MONTH(\year, \month) {
-    my @days-in-month = 0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31;
+sub DAYS-IN-MONTH(int \year, int \month --> Int:D) {
+    my int @days-in-month = 0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31;
 
     @days-in-month[month] || (month == 2 ?? 28 + IS-LEAP-YEAR(year) !! Nil)
 }
@@ -13,8 +13,9 @@ sub DAYS-IN-MONTH(\year, \month) {
 
 class Weekday {...}
 
-constant Ultimo = Mu.new;
-subset IntWhatever where * ~~ Int|Whatever|Range|Seq|List|Ultimo;
+# constant Ultimo is export = Mu.new;
+enum Ultimo <Ultimo>;
+subset IntWhatever where * ~~ Int|Whatever|WhateverCode|Range|Seq|List|Ultimo;
 
 class DateTimeRange {
     has $.year;
@@ -55,7 +56,9 @@ class DateTimeRange {
     }
 
     multi method ACCEPTS(DateTime \other){
-        my $day = $!day ~~ Whatever ?? 1..31 !! $!day;
+        my $day = $!day ~~ Whatever ?? 1..31
+                  !! $!day ~~ Ultimo ?? DAYS-IN-MONTH($!year, $!month)
+                  !! $!day;
 
         other.year ~~ $!year
         && other.month ~~ $!month
@@ -63,6 +66,17 @@ class DateTimeRange {
         && other.hour ~~ $!hour
         && other.minute ~~ $!minute
         && other.second ~~ $!second
+    }
+
+    multi method ACCEPTS(Date \other){
+        my $day = $!day ~~ Whatever ?? 1..31
+                  !! $!day ~~ Ultimo ?? DAYS-IN-MONTH($!year, $!month)
+                  !! $!day ~~ WhateverCode ?? $!day.(DAYS-IN-MONTH($!year, $!month) + 1)
+                  !! $!day;
+
+        other.year ~~ $!year
+        && other.month ~~ $!month
+        && other.day ~~ $day
     }
 
     multi method ACCEPTS(Instant \other){
@@ -95,7 +109,10 @@ class DateTimeRange {
             loop (my Mu $til-y := move-iterator-to-next-value($now.year, $it-y); $til-y !=:= IterationEnd; $til-y := $it-y.pull-one) {
                 my $it-m = $.month.cache.iterator;
                 loop (my Mu $til-m := move-iterator-to-next-value($start-month, $it-m); $til-m !=:= IterationEnd; $til-m := $it-m.pull-one) {
-                    my $day = $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($til-y, $til-m) !! $.day;
+                    my $day = $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($til-y, $til-m) 
+                              !! $.day ~~ Ultimo ?? [ DAYS-IN-MONTH($til-y, $til-m) ]
+                              !! $.day ~~ WhateverCode ?? [ $.day.(DAYS-IN-MONTH($til-y, $til-m) + 1) ]
+                              !! $.day;
                     my $it-d = $day.cache.iterator;
                     loop (my Mu $til-d := move-iterator-to-next-value($start-day, $it-d); $til-d !=:= IterationEnd; $til-d := $it-d.pull-one) {
                         my $it-h = $.hour.cache.iterator;
@@ -136,7 +153,9 @@ class DateTimeRange {
         gather for $.year.cache -> $y {
             for $.month.cache -> $m {
                 
-                my @day := $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($y, $m) !! @($.day);
+                my @day := $.day ~~ Whatever ?? 1 .. DAYS-IN-MONTH($y, $m) 
+                           !! $!day ~~ WhateverCode ?? [$!day.(DAYS-IN-MONTH($y, $m) + 1)]
+                           !! @($.day);
 
                 for @day -> $d {
                     for $.hour.cache -> $h {
@@ -184,7 +203,10 @@ class DateRange {
     multi method ACCEPTS(Date(Dateish) \other){
         $!year ~~ Whatever ?? True !! other.year ∩ $!year
         && other.month ∩ $!month
-        && $!day ~~ Whatever ?? True !! other.day ∩ $!day
+        && $!day ~~ Whatever ?? True 
+           !! $!day ~~ Ultimo ?? DAYS-IN-MONTH($!year, $!month)
+           !! $!day ~~ WhateverCode ?? $!day.(DAYS-IN-MONTH($!year, $!month) + 1)
+           !! other.day ∩ $!day
     }
 
     multi method ACCEPTS(Instant \other){
@@ -196,7 +218,7 @@ class DateRange {
     }
 
     multi method Supply {
-
+        X::NYI.new(:feature<DateRange::Supply>).throw
     }
 
     multi method tap {
@@ -206,7 +228,10 @@ class DateRange {
     multi method list {
         gather for $.year.cache -> $y {
             for $.month.cache -> $m {
-                my @day := $.day ~~ Whatever ?? (1 .. DAYS-IN-MONTH($y, $m)) !! @($.day);
+                my @day := $.day ~~ Whatever ?? (1 .. DAYS-IN-MONTH($y, $m)) 
+                           !! $.day ~~ Ultimo ?? [DAYS-IN-MONTH($y, $m)]
+                           !! $!day ~~ WhateverCode ?? [$!day.(DAYS-IN-MONTH($y, $m) + 1)]
+                           !! @($.day);
 
                 for @day -> $d {
                     my $date = Date.new($y, $m, $d); 
